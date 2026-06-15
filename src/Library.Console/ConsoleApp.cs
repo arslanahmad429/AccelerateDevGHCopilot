@@ -136,6 +136,7 @@ public class ConsoleApp
             {
                 "q" when options.HasFlag(CommonActions.Quit) => CommonActions.Quit,
                 "s" when options.HasFlag(CommonActions.SearchPatrons) => CommonActions.SearchPatrons,
+                "b" when options.HasFlag(CommonActions.SearchBooks) => CommonActions.SearchBooks,
                 "m" when options.HasFlag(CommonActions.RenewPatronMembership) => CommonActions.RenewPatronMembership,
                 "e" when options.HasFlag(CommonActions.ExtendLoanedBook) => CommonActions.ExtendLoanedBook,
                 "r" when options.HasFlag(CommonActions.ReturnLoanedBook) => CommonActions.ReturnLoanedBook,
@@ -170,6 +171,10 @@ public class ConsoleApp
         {
             Console.WriteLine(" - \"s\" for new search");
         }
+        if (options.HasFlag(CommonActions.SearchBooks))
+        {
+            Console.WriteLine(" - \"b\" to check for book availability");
+        }
         if (options.HasFlag(CommonActions.Quit))
         {
             Console.WriteLine(" - \"q\" to quit");
@@ -193,7 +198,7 @@ public class ConsoleApp
             loanNumber++;
         }
 
-        CommonActions options = CommonActions.SearchPatrons | CommonActions.Quit | CommonActions.Select | CommonActions.RenewPatronMembership;
+        CommonActions options = CommonActions.SearchPatrons | CommonActions.Quit | CommonActions.Select | CommonActions.RenewPatronMembership | CommonActions.SearchBooks;
         CommonActions action = ReadInputOptions(options, out int selectedLoanNumber);
         if (action == CommonActions.Select)
         {
@@ -217,6 +222,11 @@ public class ConsoleApp
         {
             return ConsoleState.PatronSearch;
         }
+        else if (action == CommonActions.SearchBooks)
+        {
+            await SearchBooks();
+            return ConsoleState.PatronDetails;
+        }
         else if (action == CommonActions.RenewPatronMembership)
         {
             var status = await _patronService.RenewMembership(selectedPatronDetails.Id);
@@ -227,6 +237,38 @@ public class ConsoleApp
         }
 
         throw new InvalidOperationException("An input option is not handled.");
+    }
+
+    async Task SearchBooks()
+    {
+        Console.Write("Enter a book title to check availability: ");
+        string? title = Console.ReadLine();
+        if (String.IsNullOrWhiteSpace(title))
+        {
+            Console.WriteLine("Book title cannot be empty.");
+            return;
+        }
+
+        List<Loan> matchingLoans = await _loanRepository.SearchLoansByBookTitle(title);
+        if (matchingLoans.Count == 0)
+        {
+            Console.WriteLine($"No books found matching '{title}'.");
+            return;
+        }
+
+        string normalizedTitle = title.Trim().ToLowerInvariant();
+        List<Loan> activeLoans = matchingLoans
+            .Where(l => l.ReturnDate == null)
+            .ToList();
+
+        if (activeLoans.Count == 0)
+        {
+            Console.WriteLine($"{matchingLoans[0].BookItem!.Book!.Title} is available for loan.");
+            return;
+        }
+
+        DateTime nextDueDate = activeLoans.Min(l => l.DueDate);
+        Console.WriteLine($"{activeLoans[0].BookItem!.Book!.Title} is on loan to another patron. The return due date is {nextDueDate}.");
     }
 
     async Task<ConsoleState> LoanDetails()

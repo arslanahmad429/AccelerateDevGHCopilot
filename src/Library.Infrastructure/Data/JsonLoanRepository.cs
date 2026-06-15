@@ -52,4 +52,32 @@ public class JsonLoanRepository : ILoanRepository
             await _jsonData.LoadData();
         }
     }
+
+    public async Task<List<Loan>> SearchLoansByBookTitle(string title)
+    {
+        await _jsonData.EnsureDataLoaded();
+
+        string normalizedTitle = title.Trim().ToLowerInvariant();
+        var matchingBookItemIds = new HashSet<int>();
+
+        foreach (BookItem bookItem in _jsonData.BookItems!)
+        {
+            BookItem populatedBookItem = _jsonData.GetPopulatedBookItem(bookItem);
+            if (populatedBookItem.Book?.Title?.ToLowerInvariant().Contains(normalizedTitle) == true)
+            {
+                matchingBookItemIds.Add(populatedBookItem.Id);
+            }
+        }
+
+        List<Loan> matchingLoans = new List<Loan>();
+        foreach (Loan loan in _jsonData.Loans!)
+        {
+            if (matchingBookItemIds.Contains(loan.BookItemId))
+            {
+                matchingLoans.Add(_jsonData.GetPopulatedLoan(loan));
+            }
+        }
+
+        return matchingLoans;
+    }
 }
